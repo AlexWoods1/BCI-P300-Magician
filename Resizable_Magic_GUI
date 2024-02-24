@@ -1,0 +1,272 @@
+import tkinter as tk
+import random
+import threading
+import PIL.Image
+from PIL import ImageTk, Image
+
+
+class SpellerGridApp:
+    def __init__(self, root, Images, transition_duration=1500, background_color='black', rotations=1):
+        """
+        root: Master Window
+        """
+
+        # During Testing my computer screen was 1920 x 1080 if you have trouble resizing it.
+        # Setting Up the screen size, although elements may be out of place for some screen sizes
+        self.root = root
+        self.background_color = background_color
+        self.root.title("Speller Grid")
+        self.root.configure(bg=background_color)
+        root.attributes('-fullscreen', True)
+        self.window_width = int(window.winfo_screenwidth() / 58)
+        self.window_height = self.window_width * 2
+        self.rows = 2
+        self.cols = 7
+        self.img_size = (int(window.winfo_screenwidth() / self.cols), int(window.winfo_screenheight() / self.rows))
+        self.rotations = rotations
+        # How long in ms each slide lasts
+        # Note: When Showing them instructions and the card for the first time we give them more time.
+        self.transition_duration = transition_duration
+        # Resizing Images
+        self.image_names = []
+        self.images = []
+
+        for i in Images:
+            self.image_names.append(i)
+        for image in range(len(self.image_names)):
+            self.images.append(ImageTk.PhotoImage(Image.open(self.image_names[image]).resize(self.img_size)))
+            self.images[image].image = self.images[image]
+        self.random_images = random.sample(self.images, 52)
+        # I create a custom image that serves to cover up images when we hide the cards.
+        black_image = PIL.Image.new(mode='RGB', size=self.img_size, color=background_color)
+        self.black = ImageTk.PhotoImage(black_image)
+        # You must reference the image in order for python to keep the image
+        self.black.image = self.black
+
+        # Create a frame to hold the speller grid
+        self.grid_frame = tk.Frame(root, bg=self.background_color)
+        self.grid_frame.pack()
+
+        # Create buttons for each cell in the grid, (we end up only using one button so there was no need for the grid)
+        self.Label = [[tk.Label(self.grid_frame, text='', width=1, height=2, font=('Helvetica', 190))
+                       for j in range(self.cols)] for i in range(self.rows)]
+
+        # Place the buttons in the grid
+        for i in range(self.rows):
+            for j in range(self.cols):
+                self.Label[i][j].grid(row=i, column=j)
+
+        self.Entry_slide()
+
+    def run(self):
+        # starts the actual code.
+        self.root.mainloop()
+
+    def Entry_slide(self):
+        """ This is the First slide, and leaves a remaining layer
+         called that is pack_forgotten in the subsequent function
+         returns: The first slide
+         """
+        self.grid_frame.pack_forget()
+        self.card_label = tk.Frame(self.root)
+        self.card_label.pack()
+        Card = tk.Label(self.card_label,
+                        text="Here is your card",
+                        bg="white", fg="black",
+                        width=int(self.window_width),
+                        height=int(self.window_height), font=('Helvetica', 75))
+        Card.pack()
+        self.root.after(self.transition_duration + 1000, self.show_one_card)
+
+    def show_one_card(self):
+        """
+        Parameters:
+        self.single: a tk frame that contains this layer
+        self.card: the shown image depending on value.
+
+        Notes:
+            Leaves a layer called single that must be subsequently pack_forget() in order to move on.
+        """
+        # Forgets previous Layer
+        self.card_label.pack_forget()
+        # Defines Current Layer
+        self.single = tk.Frame(self.root, width=self.window_width, height=self.window_height)
+        # Makes it visible
+        self.single.pack(expand=True, fill='both')
+        # Creates a Label that will show the subject the playing card
+        self.card = tk.Label(self.single,
+                             bg='white',
+                             width=self.window_width, height=self.window_height, font=('Helvetica', 190), bd=0)
+        # Defines what Playing card is shown (Randomly)
+        random_card = random.choice(self.random_images)
+        # Prints Card Name
+        self.shown_card = str(self.image_names[int(str(random_card).removeprefix('pyimage')) - 1]).removesuffix('.png')
+        for i in range(10):
+            self.random_images.append(self.images[self.image_names.index((str(self.shown_card) + '.png'))])
+
+        print(f"The shown Card was a ", self.shown_card)
+        self.card.configure(image=random_card)
+        # Special instructions to show the Image
+        self.card.pack(fill='both', expand=True)
+        # Transition
+        self.root.after(self.transition_duration + 1000, self.phasePost1)
+
+    def phasePost1(self):
+        """ Transition Slide
+        Notes:
+            Creates a layer called Card_label_2 and an object called Card,
+             which must be pack_forget() in order to continue.
+
+        """
+        self.single.pack_forget()
+        self.card_label_2 = tk.Frame(self.root)
+        self.card_label_2.pack()
+        Card = tk.Label(self.card_label_2,
+                        text="Now Find your Card...",
+                        bg="white", fg="black",
+                        width=int(self.window_width),
+                        height=int(self.window_height), font=('Helvetica', 75))
+        Card.pack()
+        self.root.after(self.transition_duration, self.phasePre2)
+
+    def phasePre2(self):
+        """
+        Notes:
+            Essentially just creates two threads, one of which is currently useless (t2).
+            In addition, it sets up startThreadOne to be ready to actually define the matrix for the cards.
+        """
+        # change sizing back
+        self.card_label_2.pack_forget()
+        t1 = threading.Thread(target=self.startThreadOne)
+        t2 = threading.Thread(target=self.startThreadTwo)
+        # self.root.after(self.transition_duration, self.circleThroughOptions)
+        t1.start()
+        t2.start()
+
+    def startThreadOne(self):
+        """
+        Notes:
+            In essence this actually creates the initial Grid of cards, with one set to show.
+
+        """
+        self.grid_frame.pack()
+        # Thread 1, this thread, will circulate through all the cards endlessly
+        # until thread two gets the needed input for a p300 spike
+        # where we will join the two threads for the end of the gui
+        for col in range(len(self.Label)):
+            for row in range(len(self.Label[col])):
+                self.Label[col][row].configure(fg='black', image=self.black, width=self.img_size[0],
+                                               height=self.img_size[1], bd=0)
+        # Spades
+        self.Label[0][0].configure(bg="white", image=random.choice(self.images))
+        self.root.after(self.transition_duration, self.circleThroughOptions)
+
+    def startThreadTwo(self):
+        # Thread 2 will continuously check for the input where we can stop both the threads and start the end of the gui
+        self.root.after(self.transition_duration + 1000, self.checkForInput)
+
+    def checkForInput(self):
+        # !This needs to be finished
+        """
+        input_value = self.user_input.get()
+
+        if input_value == "1":
+            self.result_label.configure(text="Input is 1")
+        elif input_value == "0":
+            self.result_label.configure(text="Input is 0")
+        else:
+            self.result_label.configure(text="Waiting for input...")
+
+        # Reschedule the function after 100 milliseconds
+        self.root.after(100, self.checkForInput)
+        """
+        # self.root.after(10000, self.finish)
+        pass
+
+    def finish(self):
+        self.grid_frame.pack_forget()
+        """
+        Parameters:
+        self.single: a tk frame that contains this layer
+        self.card: the shown image depending on value.
+
+        Notes:
+            Leaves a layer called single that must be subsequently pack_forget() in order to move on.
+        """
+        # Defines Current Layer
+        self.single_2 = tk.Frame(self.root, width=self.window_width, height=self.window_height)
+        # Makes it visible
+        self.single_2.pack(expand=True, fill='both')
+        # Creates a Label that will show the subject the playing card
+        self.card_2 = tk.Label(self.single_2,
+                               bg='white',
+                               width=self.window_width, height=self.window_height, font=('Helvetica', 190), bd=0)
+        # Defines what Playing card is shown (Randomly)
+        self.card_2.configure(image=self.images[self.image_names.index((str(self.shown_card) + '.png'))])
+        # Special instructions to show the Image
+        self.card_2.pack(fill='both', expand=True)
+
+    def circleThroughOptions(self):
+        """
+        This is the Code that makes the images actually flash on and off
+        One of the concerns I have with this code is that because we don't change the positions of the cards,
+        we may change our test results.
+        """
+        # Function to flash colors and letters on buttons
+        # Turns on King of Diamonds and Turns off King of Spades
+
+        self.random_card = random.choice(self.random_images)
+
+        def inner_loop():
+            for col in range(0, len(self.Label)):
+                for row in range(0, len(self.Label[col])):
+                    if self.Label[col][row].cget('bg') == "white":
+                        # Turns off the Currently on Image
+                        self.Label[col][row].configure(bg="black", image=self.black)
+                        # Turns on the next image
+                        if (row == self.cols - 1) and (col == self.rows - 1):
+                            self.Label[0][0].configure(bg="white", image=self.random_card)
+                        elif row == self.cols - 1:
+                            self.Label[col + 1][0].configure(bg="white", image=self.random_card)
+                        else:
+                            self.Label[col][row + 1].configure(bg="white", image=self.random_card)
+                        return row, col
+
+        if inner_loop() == (self.cols - 1, self.rows - 1):
+            self.finish()
+        else:
+            self.root.after(self.transition_duration, self.circleThroughOptions)
+
+        # Turns on King of Hearts and Turns off King of Diamonds
+
+
+# Create the main window
+window = tk.Tk()
+# Create and run the SpellerGridApp
+# If you want to replace the images I've made it possible, and it should be able to resize the images using a parameter
+# , although it's untested and highly unlikely to work...
+images = ['10_of_clubs.png', '10_of_diamonds.png', '10_of_hearts.png', '10_of_spades.png',
+          '2_of_clubs.png', '2_of_diamonds.png', '2_of_hearts.png', '2_of_spades.png',
+          '3_of_clubs.png', '3_of_diamonds.png', '3_of_hearts.png', '3_of_spades.png',
+          '4_of_clubs.png', '4_of_diamonds.png', '4_of_hearts.png', '4_of_spades.png',
+          '5_of_clubs.png', '5_of_diamonds.png', '5_of_hearts.png', '5_of_spades.png',
+          '6_of_clubs.png', '6_of_diamonds.png', '6_of_hearts.png', '6_of_spades.png',
+          '7_of_clubs.png', '7_of_diamonds.png', '7_of_hearts.png', '7_of_spades.png',
+          '8_of_clubs.png', '8_of_diamonds.png', '8_of_hearts.png', '8_of_spades.png',
+          '9_of_clubs.png', '9_of_diamonds.png', '9_of_hearts.png', '9_of_spades.png',
+          'ace_of_clubs.png', 'ace_of_diamonds.png', 'ace_of_hearts.png', 'ace_of_spades.png',
+          'jack_of_clubs2.png', 'jack_of_diamonds2.png', 'jack_of_hearts2.png', 'jack_of_spades2.png',
+          'king_of_clubs2.png', 'king_of_diamonds2.png', 'king_of_hearts2.png', 'king_of_spades2.png',
+          'queen_of_clubs2.png', 'queen_of_diamonds2.png', 'queen_of_hearts2.png',
+          'queen_of_spades2.png']
+
+# AUTOMATIC Image resizer based on row and columns
+speller_grid_app = SpellerGridApp(window, images, background_color='white')
+
+speller_grid_app.run()
+
+"""
+To do:
+Secondary Tasks:
+    Clean Up Code
+"""
